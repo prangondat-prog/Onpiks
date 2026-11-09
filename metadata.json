@@ -1,0 +1,6 @@
+{
+  "name": "Onpiks",
+  "description": "Real-time market analysis, candlestick direction preview (Up/Down today), live news sentiment, and automated trade calculation brain across crypto, stocks, oil, commodities, and forex.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
