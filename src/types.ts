@@ -15,7 +15,20 @@ export type AssetCategory =
   | 'consumer'
   | 'industrial';
 
-export type ActiveTaskView = 'home' | 'trade' | 'updown' | 'analyze';
+export type ActiveTaskView = 'home' | 'trade' | 'updown' | 'analyze' | 'dashboard';
+
+export interface UserTrade {
+  id: string;
+  symbol: string;
+  type: 'LONG' | 'SHORT' | 'BUY' | 'SELL';
+  price: number;
+  amount: number;
+  time: string;
+  status: 'OPEN' | 'CLOSED';
+  pnl?: number;
+  pnlPercent?: number;
+  isDemo: boolean;
+}
 
 export interface MarketAsset {
   symbol: string;

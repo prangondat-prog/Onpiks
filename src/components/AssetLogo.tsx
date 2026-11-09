@@ -7,11 +7,12 @@ import React from 'react';
 
 interface AssetLogoProps {
   symbol: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
 }
 
 export const AssetLogo: React.FC<AssetLogoProps> = ({ symbol, size = 'sm' }) => {
   const sizeClasses = {
+    xs: 'w-4 h-4 text-[8px]',
     sm: 'w-5 h-5 text-[10px]',
     md: 'w-7 h-7 text-xs',
     lg: 'w-9 h-9 text-sm',

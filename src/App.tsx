@@ -3,57 +3,41 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { MarketAsset, Candle, TechnicalIndicators, BrainPrediction, AssetCategory, ActiveTaskView } from './types.js';
-import { Header } from './components/Header.tsx';
-import { TaskBar } from './components/TaskBar.tsx';
-import { MarketBar } from './components/MarketBar.tsx';
-import { CandleChart } from './components/CandleChart.tsx';
-import { BrainPredictionCard } from './components/BrainPredictionCard.tsx';
-import { GoogleTradeCard } from './components/GoogleTradeCard.tsx';
-import { AITradeHubModal } from './components/AITradeHubModal.tsx';
-import { GoogleAnalyticsTrendsCard } from './components/GoogleAnalyticsTrendsCard.tsx';
-import { NewsSentimentsCard } from './components/NewsSentimentsCard.tsx';
-import { TechnicalsCard } from './components/TechnicalsCard.tsx';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { 
+  MarketAsset, 
+  BrainPrediction, 
+  UserTrade 
+} from './types.js';
 import { AssetLogo } from './components/AssetLogo.tsx';
+import { AITradeHubModal } from './components/AITradeHubModal.tsx';
 import {
-  Globe,
-  AlertCircle,
   TrendingUp,
-  Compass,
-  BarChart3,
-  Home as HomeIcon,
-  Layers,
-  ArrowRight,
+  TrendingDown,
+  ArrowLeft,
   Search,
-  Zap,
-  Building2,
+  Activity,
+  ShieldCheck,
+  DollarSign
 } from 'lucide-react';
 
 export default function App() {
   const [markets, setMarkets] = useState<MarketAsset[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState<string>('BTC/USD');
-  const [selectedCategory, setSelectedCategory] = useState<AssetCategory>('all');
-  const [timeframe, setTimeframe] = useState<string>('1d');
-  const [activeTask, setActiveTask] = useState<ActiveTaskView>('home');
-  const [fastSearchQuery, setFastSearchQuery] = useState<string>('');
-  const [isAITradeHubOpen, setIsAITradeHubOpen] = useState<boolean>(false);
-
-  const [candles, setCandles] = useState<Candle[]>([]);
-  const [technicals, setTechnicals] = useState<TechnicalIndicators | undefined>();
+  const [userTrades, setUserTrades] = useState<UserTrade[]>([]);
+  const [activeStudies] = useState<string[]>(['BOL', 'RSI']);
+  const [isDemoTrade, setIsDemoTrade] = useState<boolean>(true);
+  const [tradeAmount, setTradeAmount] = useState<number>(500);
   const [prediction, setPrediction] = useState<BrainPrediction | null>(null);
-
   const [isLoadingMarkets, setIsLoadingMarkets] = useState<boolean>(true);
-  const [isLoadingCandles, setIsLoadingCandles] = useState<boolean>(true);
-  const [isLoadingPrediction, setIsLoadingPrediction] = useState<boolean>(true);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [lastUpdated, setLastUpdated] = useState<string>('');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLoadingPrediction, setIsLoadingPrediction] = useState<boolean>(false);
+  const [orderFeedback, setOrderFeedback] = useState<string | null>(null);
 
-  // Active selected asset
-  const activeAsset = markets.find((m) => m.symbol === selectedSymbol) || markets[0];
+  const activeAsset = useMemo(() => 
+    markets.find((m) => m.symbol === selectedSymbol) || markets[0], 
+    [markets, selectedSymbol]
+  );
 
-  // Fetch live market assets
   const loadMarkets = useCallback(async (isInitial: boolean = false) => {
     try {
       if (isInitial) setIsLoadingMarkets(true);
@@ -62,35 +46,14 @@ export default function App() {
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
         setMarkets(data.data);
-        setLastUpdated(new Date().toLocaleTimeString());
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Markets fetch error:', err);
-      if (isInitial) setErrorMessage('Unable to reach real-time market data API.');
     } finally {
       if (isInitial) setIsLoadingMarkets(false);
     }
   }, []);
 
-  // Fetch candles & technical indicators
-  const loadCandles = useCallback(async (symbol: string, tf: string) => {
-    try {
-      setIsLoadingCandles(true);
-      const res = await fetch(`/api/candles?symbol=${encodeURIComponent(symbol)}&timeframe=${tf}`);
-      if (!res.ok) throw new Error('Failed to load candles');
-      const data = await res.json();
-      if (data.success) {
-        setCandles(data.candles || []);
-        setTechnicals(data.technicals);
-      }
-    } catch (err: any) {
-      console.error('Candles fetch error:', err);
-    } finally {
-      setIsLoadingCandles(false);
-    }
-  }, []);
-
-  // Fetch Inside Calculation Brain Prediction & News Sentiment
   const loadPrediction = useCallback(async (symbol: string) => {
     try {
       setIsLoadingPrediction(true);
@@ -104,665 +67,337 @@ export default function App() {
       if (data.success && data.prediction) {
         setPrediction(data.prediction);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Prediction fetch error:', err);
     } finally {
       setIsLoadingPrediction(false);
     }
   }, []);
 
-  // Handle asset switch cleanly
-  const handleSelectSymbol = (newSymbol: string) => {
-    if (newSymbol === selectedSymbol) return;
-    setSelectedSymbol(newSymbol);
-    setPrediction(null); // Clear old prediction immediately so chart scale never gets distorted
-  };
-
-  // Handle page/task change
-  const handleTaskChange = (task: ActiveTaskView) => {
-    setActiveTask(task);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  // Initial load
   useEffect(() => {
     loadMarkets(true);
-  }, [loadMarkets]);
-
-  // Load candles & prediction when selected symbol or timeframe changes
-  useEffect(() => {
-    if (selectedSymbol) {
-      loadCandles(selectedSymbol, timeframe);
-      loadPrediction(selectedSymbol);
-    }
-  }, [selectedSymbol, timeframe, loadCandles, loadPrediction]);
-
-  // Polling for live real-time market prices every 15 seconds
-  useEffect(() => {
-    const timer = setInterval(() => {
-      loadMarkets(false);
-    }, 15000);
+    const timer = setInterval(() => loadMarkets(false), 800);
     return () => clearInterval(timer);
   }, [loadMarkets]);
 
-  // Manual refresh handler
-  const handleManualRefresh = async () => {
-    setIsRefreshing(true);
-    await Promise.all([
-      loadMarkets(false),
-      loadCandles(selectedSymbol, timeframe),
-      loadPrediction(selectedSymbol),
-    ]);
-    setIsRefreshing(false);
+  const [lastPrice, setLastPrice] = useState<number>(0);
+  const [priceTickDir, setPriceTickDir] = useState<'UP' | 'DOWN' | null>(null);
+
+  useEffect(() => {
+    if (activeAsset && activeAsset.price !== lastPrice) {
+      setPriceTickDir(activeAsset.price > lastPrice ? 'UP' : 'DOWN');
+      setLastPrice(activeAsset.price);
+      const timer = setTimeout(() => setPriceTickDir(null), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [activeAsset, lastPrice]);
+
+  useEffect(() => {
+    if (selectedSymbol) {
+      loadPrediction(selectedSymbol);
+      const pTimer = setInterval(() => loadPrediction(selectedSymbol), 25000);
+      return () => clearInterval(pTimer);
+    }
+  }, [selectedSymbol, loadPrediction]);
+
+  const handleAction = (type: 'LONG' | 'SHORT' | 'BUY' | 'SELL') => {
+    if (!activeAsset) return;
+    
+    const units = tradeAmount / activeAsset.price;
+    const newTrade: UserTrade = {
+      id: Math.random().toString(36).substring(7),
+      symbol: selectedSymbol,
+      type,
+      price: activeAsset.price,
+      amount: Number(units.toFixed(4)),
+      time: new Date().toLocaleString(),
+      status: 'OPEN',
+      isDemo: isDemoTrade,
+    };
+
+    setUserTrades([newTrade, ...userTrades]);
+    setOrderFeedback(`${isDemoTrade ? '[DEMO]' : '[REAL]'} ${type} Order Executed: $${tradeAmount} (${units.toFixed(4)} ${selectedSymbol.split('/')[0]}) @ $${activeAsset.price}`);
+    setTimeout(() => setOrderFeedback(null), 4000);
   };
 
-  // Find US Dollar Index (DXY) asset for live header gauge
-  const dxyAsset = markets.find((m) => m.symbol === 'DXY');
+  const getStudiesParam = () => {
+    const studyMap: Record<string, string> = {
+      BOL: 'BollingerBands@tv-basicstudies',
+      RSI: 'RSI@tv-basicstudies',
+      MACD: 'MACD@tv-basicstudies',
+    };
+    const studies = activeStudies.map((s) => studyMap[s]).filter(Boolean);
+    return encodeURIComponent(JSON.stringify(studies));
+  };
+
+  const getTradingViewSymbol = (sym: string, asset?: MarketAsset) => {
+    if (sym === 'BTC/USD') return 'BINANCE:BTCUSDT';
+    if (sym === 'ETH/USD') return 'BINANCE:ETHUSDT';
+    if (sym === 'SOL/USD') return 'BINANCE:SOLUSDT';
+    if (sym === 'BNB/USD') return 'BINANCE:BNBUSDT';
+    if (sym === 'XRP/USD') return 'BINANCE:XRPUSDT';
+    if (sym === 'OIL_WTI') return 'NYMEX:CL1!';
+    if (sym === 'OIL_BRENT') return 'TVC:UKOIL';
+    if (sym === 'GOLD') return 'COMEX:GC1!';
+    if (sym === 'SILVER') return 'COMEX:SI1!';
+    if (sym === 'NATGAS') return 'NYMEX:NG1!';
+    if (asset?.category === 'forex') return 'FX_IDC:' + sym.replace('/', '');
+    if (sym.startsWith('^')) return 'INDEX:' + sym.replace('^', '');
+    return sym;
+  };
+
+  if (isLoadingMarkets || !activeAsset) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  const isPriceUp = activeAsset.change24hPercent >= 0;
 
   return (
-    <div className="min-h-screen bg-white text-black font-sans selection:bg-black selection:text-white flex flex-col">
-      {/* Top Header */}
-      <Header
-        lastUpdated={lastUpdated}
-        isRefreshing={isRefreshing}
-        onRefresh={handleManualRefresh}
-        activeAssetCount={markets.length}
-        selectedCategory={selectedCategory}
-        onSelectCategory={(cat) => setSelectedCategory(cat)}
-        dxyAsset={dxyAsset}
-      />
+    <div className="bg-black text-white antialiased min-h-screen flex flex-col font-sans selection:bg-emerald-400 selection:text-black">
+      
+      {/* Toast Notification */}
+      {orderFeedback && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 bg-white text-black font-black text-xs uppercase tracking-widest rounded-lg shadow-2xl animate-in fade-in slide-in-from-top-4">
+          {orderFeedback}
+        </div>
+      )}
 
-      {/* Task Navigation Bar: Home, Trade, Up Down, Analyze */}
-      <TaskBar
-        activeTask={activeTask}
-        onChangeTask={handleTaskChange}
-        selectedCategory={selectedCategory}
-        onSelectCategory={(cat) => setSelectedCategory(cat)}
-        onSelectSymbol={handleSelectSymbol}
-      />
-
-      {/* Market Bar with Instant Search & Round Small Logo Ticker Cards */}
-      <MarketBar
-        markets={markets}
-        selectedSymbol={selectedSymbol}
-        onSelectSymbol={handleSelectSymbol}
-        selectedCategory={selectedCategory}
-        onSelectCategory={(cat) => setSelectedCategory(cat)}
-      />
-
-      {/* Main Content Viewport (pb-24 on mobile so sticky bottom task bar never overlaps content) */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 pb-24 md:pb-8 space-y-6">
-        {errorMessage && (
-          <div className="p-3 bg-rose-50 border border-rose-300 rounded-md text-xs text-rose-800 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
-        {/* ============================================================ */}
-        {/* PAGE 1: HOME OVERVIEW (Fast Product & Shares Tracker + Summary) */}
-        {/* ============================================================ */}
-        {activeTask === 'home' && (
-          <div className="space-y-6">
-            {/* Quick Page Jump Banner */}
-            <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-8 pb-20">
+        
+        {/* Navigation & Asset Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-6">
+            <button className="text-neutral-500 hover:text-white transition-colors cursor-pointer">
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+            <div className="flex items-center gap-4">
+              <AssetLogo symbol={selectedSymbol} size="lg" />
               <div>
-                <h1 className="text-base font-bold text-black font-sans flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
-                  Onpiks Fast Market & Company Share Intelligence
-                </h1>
-                <p className="text-xs text-neutral-500 font-mono mt-0.5">
-                  Track 50+ company shares, oil, commodities, forex & crypto in sub-seconds.
-                </p>
-              </div>
-
-              {/* Fast links to other pages */}
-              <div className="flex items-center gap-2 flex-wrap text-xs font-mono">
-                <button
-                  onClick={() => handleTaskChange('trade')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-black text-white hover:bg-neutral-800 rounded-md font-semibold transition-colors cursor-pointer shadow-xs"
-                >
-                  <Compass className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Open Interactive Chart (Trade) ↗</span>
-                </button>
-
-                <button
-                  onClick={() => handleTaskChange('updown')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-neutral-300 hover:border-black rounded-md text-black font-semibold transition-colors cursor-pointer"
-                >
-                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Up Down Page</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Fast Product & Company Share Search Console ("make a Fast And Can Trake any product and sheres of every company in few second") */}
-            <div className="w-full bg-white border border-neutral-300 rounded-xl p-4 shadow-xs space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-neutral-200">
                 <div className="flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-black" />
-                  <span className="text-xs font-bold text-black font-sans">
-                    Fast Track Any Product, Share & Currency (Sub-Second Lookup)
-                  </span>
+                  <h1 className="text-3xl font-black tracking-tighter uppercase">{selectedSymbol.split('/')[0]}</h1>
+                  <ShieldCheck className="w-5 h-5 text-blue-500" />
                 </div>
-                <span className="text-[10px] font-mono text-neutral-400 uppercase">
-                  {markets.length} Tickers Verified Live
+                <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest">{activeAsset.name} ({activeAsset.category})</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+             <button 
+              onClick={() => setIsDemoTrade(!isDemoTrade)}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all cursor-pointer ${isDemoTrade ? 'border-amber-500/30 text-amber-500 bg-amber-500/5' : 'border-emerald-500/30 text-emerald-500 bg-emerald-500/5'}`}
+             >
+               {isDemoTrade ? 'Demo Mode' : 'Live Mode'}
+             </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          {/* Left Column: Data & Chart */}
+          <div className="lg:col-span-8 space-y-6">
+            
+            {/* Price Overview - Always White */}
+            <div className="flex items-baseline gap-4">
+              <span className="text-6xl font-black tracking-tighter tabular-nums text-white">
+                ${activeAsset.price.toLocaleString(undefined, { minimumFractionDigits: activeAsset.precision })}
+              </span>
+              <div className="flex flex-col">
+                <span className={`text-lg font-black font-mono ${isPriceUp ? 'text-emerald-400' : 'text-rose-500'}`}>
+                  {isPriceUp ? '▲' : '▼'} {Math.abs(activeAsset.change24hPercent).toFixed(2)}%
                 </span>
-              </div>
-
-              {/* Search Bar Input */}
-              <div className="relative">
-                <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
-                <input
-                  type="text"
-                  placeholder="Fast search any company share (NVDA, Apple, Tesla...), crude oil, gold, EUR/USD..."
-                  value={fastSearchQuery}
-                  onChange={(e) => setFastSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-neutral-50 border border-neutral-300 rounded-lg text-xs font-mono text-black placeholder:text-neutral-400 focus:outline-none focus:border-black focus:bg-white transition-all"
-                />
-              </div>
-
-              {/* Quick Filtered Company Share & Product Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 text-xs font-mono pt-1 max-h-60 overflow-y-auto">
-                {markets
-                  .filter((m) => {
-                    if (!fastSearchQuery.trim()) return true;
-                    const q = fastSearchQuery.toLowerCase().trim();
-                    return (
-                      m.symbol.toLowerCase().includes(q) ||
-                      m.name.toLowerCase().includes(q) ||
-                      (m.sector && m.sector.toLowerCase().includes(q)) ||
-                      m.category.toLowerCase().includes(q)
-                    );
-                  })
-                  .slice(0, 18)
-                  .map((asset) => {
-                    const isUp = asset.change24hPercent >= 0;
-                    const isCurrent = asset.symbol === selectedSymbol;
-
-                    return (
-                      <div
-                        key={asset.symbol}
-                        onClick={() => {
-                          handleSelectSymbol(asset.symbol);
-                        }}
-                        className={`p-2.5 rounded-lg border cursor-pointer flex flex-col justify-between transition-all ${
-                          isCurrent
-                            ? 'bg-black text-white border-black font-bold shadow-xs'
-                            : 'bg-neutral-50 hover:bg-neutral-100 border-neutral-200 text-neutral-900'
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <AssetLogo symbol={asset.symbol} size="sm" />
-                          <div className="truncate">
-                            <div className="font-bold">{asset.symbol}</div>
-                            <div
-                              className={`text-[9px] truncate ${
-                                isCurrent ? 'text-neutral-300' : 'text-neutral-500'
-                              }`}
-                            >
-                              {asset.name}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mt-2 pt-1 border-t border-neutral-200/40 flex items-center justify-between text-[11px]">
-                          <span className="tabular-nums font-bold">
-                            ${asset.price.toLocaleString(undefined, {
-                              minimumFractionDigits: asset.precision > 2 ? asset.precision : 2,
-                            })}
-                          </span>
-                          <span
-                            className={`font-bold tabular-nums text-[10px] ${
-                              isCurrent
-                                ? isUp ? 'text-emerald-400' : 'text-rose-400'
-                                : isUp ? 'text-emerald-700' : 'text-rose-700'
-                            }`}
-                          >
-                            {isUp ? '+' : ''}{asset.change24hPercent.toFixed(1)}%
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="flex items-center gap-1">
+                   <div className={`w-2 h-2 rounded-full animate-pulse ${priceTickDir === 'UP' ? 'bg-emerald-500' : priceTickDir === 'DOWN' ? 'bg-rose-500' : 'bg-neutral-800'}`}></div>
+                   <span className="text-[8px] font-black text-neutral-600 uppercase tracking-widest">Live Tick</span>
+                </div>
               </div>
             </div>
 
-            {/* 2-Column Responsive Dashboard Layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left / Main Column (8 Cols) */}
-              <div className="lg:col-span-8 space-y-6">
-                {/* 1. Inside Calculation Brain - Today's Candle Direction (Up / Down) */}
-                <BrainPredictionCard
-                  prediction={prediction}
-                  isLoading={isLoadingPrediction}
-                />
-
-                {/* 2. Google Trade - Automated Real-Time Execution Engine & P&L Calculator */}
-                <GoogleTradeCard
-                  tradeSetup={prediction?.tradeSetup}
-                  googleTrade={prediction?.googleTrade}
-                  tradeHistory={prediction?.tradeHistory}
-                  pendingOrders={prediction?.pendingOrders}
-                  currentPrice={activeAsset?.price || 0}
-                  precision={activeAsset?.precision || 2}
-                  onOpenAITradeHub={() => setIsAITradeHubOpen(true)}
-                />
+            {/* Pressure Bar */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                <span className="text-emerald-400">Demand: {isPriceUp ? 58 : 42}%</span>
+                <span className="text-rose-500">Distribution: {isPriceUp ? 42 : 58}%</span>
               </div>
+              <div className="w-full h-1.5 bg-neutral-900 rounded-full overflow-hidden flex">
+                <div className="h-full bg-emerald-400 transition-all duration-1000" style={{ width: `${isPriceUp ? 58 : 42}%` }}></div>
+                <div className="h-full bg-rose-500 transition-all duration-1000" style={{ width: `${isPriceUp ? 42 : 58}%` }}></div>
+              </div>
+            </div>
 
-              {/* Right Column (4 Cols) */}
-              <div className="lg:col-span-4 space-y-6">
-                {/* 1. World Markets Pulse Watchlist with Round Small Logos */}
-                <div className="w-full bg-white border border-neutral-200 rounded-lg p-5 shadow-xs">
-                  <div className="flex items-center justify-between pb-3.5 border-b border-neutral-200">
-                    <div className="flex items-center gap-2">
-                      <Globe className="w-4 h-4 text-black" />
-                      <h3 className="text-sm font-bold text-black font-sans">
-                        World Markets Pulse
-                      </h3>
+            {/* TradingView Chart - Real Mapped Symbols */}
+            <div className="w-full aspect-[9/16] lg:aspect-video bg-neutral-950 border border-neutral-900 overflow-hidden relative group">
+              <iframe
+                key={selectedSymbol}
+                title="TradingView Chart"
+                src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_762c4&symbol=${encodeURIComponent(getTradingViewSymbol(selectedSymbol, activeAsset))}&interval=1&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=0&saveimage=0&toolbarbg=000000&theme=dark&style=1&timezone=Etc%2FUTC&studies=${getStudiesParam()}&locale=en&utm_source=onpiks.com&allow_symbol_change=0`}
+                width="100%"
+                height="100%"
+                frameBorder="0"
+                scrolling="no"
+              />
+            </div>
+
+            {/* SIGNAL BOX AREA - Skeleton Loading & Profit UI */}
+            {isLoadingPrediction ? (
+              <div className="p-8 bg-neutral-900/50 rounded-2xl border border-white/5 animate-pulse flex items-center justify-between">
+                <div className="flex items-center gap-6">
+                  <div className="w-14 h-14 bg-neutral-800 rounded-xl"></div>
+                  <div className="space-y-3">
+                    <div className="h-6 w-32 bg-neutral-800 rounded"></div>
+                    <div className="h-3 w-48 bg-neutral-800 rounded"></div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                   <div className="h-2 w-16 bg-neutral-800 rounded ml-auto"></div>
+                   <div className="h-6 w-24 bg-neutral-800 rounded"></div>
+                </div>
+              </div>
+            ) : prediction ? (
+              <div className={`p-6 rounded-3xl flex items-center justify-between border-2 shadow-2xl transition-all duration-500 ${prediction.direction === 'UP' ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-rose-500/20 bg-rose-500/5'}`}>
+                <div className="flex items-center gap-6">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${prediction.direction === 'UP' ? 'bg-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.3)]' : 'bg-rose-500 shadow-[0_0_30px_rgba(244,63,94,0.3)]'}`}>
+                    {prediction.direction === 'UP' ? <TrendingUp className="w-8 h-8 text-black" /> : <TrendingDown className="w-8 h-8 text-white" />}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                       <span className={`w-2 h-2 rounded-full animate-pulse ${prediction.direction === 'UP' ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                       <span className="text-[10px] font-black text-white uppercase tracking-[0.3em]">AI Signal Analysis</span>
                     </div>
-                    <span className="text-[10px] font-mono text-neutral-400 uppercase">
-                      {markets.length} Assets Live
-                    </span>
-                  </div>
-
-                  <div className="divide-y divide-neutral-100 text-xs font-mono mt-1 max-h-96 overflow-y-auto">
-                    {markets.slice(0, 12).map((asset) => {
-                      const isUp = asset.change24hPercent >= 0;
-                      const isCurrent = asset.symbol === selectedSymbol;
-
-                      return (
-                        <div
-                          key={asset.symbol}
-                          onClick={() => handleSelectSymbol(asset.symbol)}
-                          className={`py-2 px-1.5 flex items-center justify-between cursor-pointer rounded transition-colors ${
-                            isCurrent ? 'bg-neutral-100 font-bold' : 'hover:bg-neutral-50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <AssetLogo symbol={asset.symbol} size="sm" />
-                            <div>
-                              <div className="font-bold text-black">{asset.symbol}</div>
-                              <div className="text-[10px] text-neutral-500 truncate max-w-[110px]">
-                                {asset.name}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="text-right">
-                            <div className="font-semibold text-black tabular-nums">
-                              ${asset.price.toLocaleString(undefined, {
-                                minimumFractionDigits: asset.precision > 2 ? asset.precision : 2,
-                              })}
-                            </div>
-                            <div
-                              className={`text-[11px] font-bold tabular-nums ${
-                                isUp ? 'text-emerald-700' : 'text-rose-700'
-                              }`}
-                            >
-                              {isUp ? '+' : ''}
-                              {asset.change24hPercent.toFixed(2)}%
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    <h2 className="text-3xl font-black uppercase tracking-tighter text-white">
+                      {prediction.direction === 'UP' ? 'BUY SIGNAL' : 'SELL SIGNAL'}
+                    </h2>
+                    <div className="flex items-center gap-3 mt-1">
+                       <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Conf: {prediction.confidence}</span>
+                       <span className="w-1 h-1 rounded-full bg-neutral-700"></span>
+                       <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Expected Profit: +{Math.abs(prediction.predictedCandle.predictedChangePercent).toFixed(2)}%</span>
+                    </div>
                   </div>
                 </div>
-
-                {/* 2. Google Trends Search Surge */}
-                <GoogleAnalyticsTrendsCard
-                  analytics={prediction?.googleTrends}
-                  symbol={selectedSymbol}
-                />
-
-                {/* 3. News Sentiments Summary */}
-                <NewsSentimentsCard
-                  news={prediction?.newsSentiments || []}
-                  symbol={selectedSymbol}
-                  assetName={activeAsset?.name || selectedSymbol}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ============================================================ */}
-        {/* PAGE 2: TRADE (Dedicated Interactive Chart & Execution Station) */}
-        {/* ============================================================ */}
-        {activeTask === 'trade' && (
-          <div className="space-y-6">
-            {/* Page Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-black text-white flex items-center justify-center">
-                  <Compass className="w-5 h-5" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-black text-black tracking-tight font-sans">
-                    Trade Station • Interactive Candlestick Chart & Execution Engine
-                  </h1>
-                  <p className="text-xs text-neutral-500 font-mono">
-                    Real-time Candlestick Chart, Phantom Quick-Trade Dock, Target Levels (TP1/TP2/TP3) & Position P&L
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest mb-1">Profit Projection</p>
+                  <p className="text-2xl font-black font-mono text-white tabular-nums">
+                    +${(tradeAmount * (Math.abs(prediction.predictedCandle.predictedChangePercent) / 100)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </p>
+                  <div className="text-[9px] font-bold text-neutral-600 uppercase tracking-tighter mt-1">For ${tradeAmount} Position</div>
                 </div>
               </div>
-
-              <div className="flex items-center gap-2 text-xs font-mono">
-                <span className="text-neutral-500">Active Trading Symbol:</span>
-                <span className="font-bold text-black px-2.5 py-1 bg-neutral-100 rounded border border-neutral-200">
-                  {selectedSymbol} (${activeAsset?.price.toFixed(activeAsset?.precision || 2)})
-                </span>
-              </div>
-            </div>
-
-            {/* 1. Main Interactive Candlestick Chart rendered inside Trade button ("make the chart in Trade buttton pliz not add in home ok") */}
-            <CandleChart
-              symbol={selectedSymbol}
-              assetName={activeAsset?.name || selectedSymbol}
-              currentPrice={activeAsset?.price || 0}
-              precision={activeAsset?.precision || 2}
-              candles={candles}
-              technicals={technicals}
-              predictedCandle={prediction?.predictedCandle}
-              predictionSymbol={prediction?.symbol}
-              predictedDirection={prediction?.direction}
-              upProbability={prediction?.upProbability}
-              timeframe={timeframe}
-              onChangeTimeframe={(tf) => setTimeframe(tf)}
-              isLoading={isLoadingCandles}
-              isDedicatedPage={true}
-            />
-
-            {/* Main Google Trade Execution Plan & Position P&L */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              <div className="lg:col-span-8 space-y-6">
-                <GoogleTradeCard
-                  tradeSetup={prediction?.tradeSetup}
-                  googleTrade={prediction?.googleTrade}
-                  tradeHistory={prediction?.tradeHistory}
-                  pendingOrders={prediction?.pendingOrders}
-                  currentPrice={activeAsset?.price || 0}
-                  precision={activeAsset?.precision || 2}
-                  onOpenAITradeHub={() => setIsAITradeHubOpen(true)}
-                />
-
-                {/* Technical Pivots Confluence */}
-                <TechnicalsCard
-                  technicals={technicals}
-                  precision={activeAsset?.precision || 2}
-                />
-              </div>
-
-              {/* Right Side: Direction Verdict & Watchlist */}
-              <div className="lg:col-span-4 space-y-6">
-                <BrainPredictionCard
-                  prediction={prediction}
-                  isLoading={isLoadingPrediction}
-                />
-
-                {/* Quick Switcher for Trades */}
-                <div className="bg-white border border-neutral-200 rounded-lg p-4 shadow-xs">
-                  <h4 className="text-xs font-bold font-mono text-black uppercase mb-3">
-                    Fast Trade Symbol Switcher
-                  </h4>
-                  <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                    {[
-                      { sym: 'BTC/USD', name: 'Bitcoin' },
-                      { sym: 'OIL_WTI', name: 'Oil WTI' },
-                      { sym: 'NVDA', name: 'NVIDIA' },
-                      { sym: 'AAPL', name: 'Apple' },
-                      { sym: 'MSFT', name: 'Microsoft' },
-                      { sym: 'TSLA', name: 'Tesla' },
-                      { sym: 'GOLD', name: 'Gold' },
-                      { sym: 'EUR/USD', name: 'EUR/USD' },
-                    ].map((item) => (
-                      <button
-                        key={item.sym}
-                        onClick={() => handleSelectSymbol(item.sym)}
-                        className={`p-2 rounded border text-left transition-colors cursor-pointer ${
-                          selectedSymbol === item.sym
-                            ? 'bg-black text-white border-black font-bold'
-                            : 'bg-neutral-50 hover:bg-neutral-100 border-neutral-200 text-neutral-800'
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5 truncate">
-                          <AssetLogo symbol={item.sym} size="sm" />
-                          <span className="truncate">{item.sym}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+            ) : null}
           </div>
-        )}
 
-        {/* ============================================================ */}
-        {/* PAGE 3: UP DOWN (Dedicated Candlestick Section & Prediction) */}
-        {/* ============================================================ */}
-        {activeTask === 'updown' && (
-          <div className="space-y-6">
-            {/* Page Header Banner */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-black text-black tracking-tight font-sans">
-                    Up Down • Candlestick Direction Prediction Terminal
-                  </h1>
-                  <p className="text-xs text-neutral-500 font-mono">
-                    Interactive Zoom In/Out & Stretchable Chart · Scroll down for Inside Calculation Brain Up/Down Forecast
-                  </p>
-                </div>
+          {/* Right Column: Actions & Watchlist */}
+          <div className="lg:col-span-4 space-y-8">
+            
+            {/* Instant Execution & Amount Selector */}
+            <div className="p-6 bg-neutral-900/50 rounded-2xl border border-neutral-800 space-y-5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-neutral-400">Position Amount ($)</h3>
+                <span className="text-xs font-mono text-emerald-400 font-bold">{(tradeAmount / activeAsset.price).toFixed(4)} {selectedSymbol.split('/')[0]}</span>
               </div>
 
-              {/* Fast Ticker Jump Strip */}
-              <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-mono">
-                {['BTC/USD', 'OIL_WTI', 'NVDA', 'AAPL', 'EUR/USD', 'GOLD'].map((sym) => (
+              {/* Amount Selector Buttons */}
+              <div className="grid grid-cols-4 gap-2">
+                {[100, 500, 1000, 5000].map((amt) => (
                   <button
-                    key={sym}
-                    onClick={() => handleSelectSymbol(sym)}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-mono cursor-pointer border ${
-                      selectedSymbol === sym
-                        ? 'bg-black text-white border-black font-bold'
-                        : 'bg-neutral-50 hover:bg-neutral-100 border-neutral-200 text-neutral-800'
-                    }`}
+                    key={amt}
+                    onClick={() => setTradeAmount(amt)}
+                    className={`py-2 rounded-xl text-xs font-black font-mono transition-all cursor-pointer border ${tradeAmount === amt ? 'bg-white text-black border-white shadow-lg' : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'}`}
                   >
-                    <AssetLogo symbol={sym} size="sm" />
-                    <span>{sym.split('/')[0]}</span>
+                    ${amt}
                   </button>
                 ))}
               </div>
+
+              {/* Custom Amount Input */}
+              <div className="relative flex items-center">
+                <DollarSign className="absolute left-4 w-4 h-4 text-neutral-500" />
+                <input
+                  type="number"
+                  value={tradeAmount}
+                  onChange={(e) => setTradeAmount(Math.max(1, Number(e.target.value)))}
+                  className="w-full pl-10 pr-4 py-3 bg-black border border-neutral-800 rounded-xl text-white font-mono font-black text-sm focus:outline-none focus:border-white transition-colors"
+                  placeholder="Enter custom amount"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-6 pt-2">
+                <button 
+                  onClick={() => handleAction('BUY')}
+                  className="p-6 bg-white hover:bg-neutral-200 text-black font-black text-lg uppercase tracking-[0.25em] rounded-[2rem] transition-all active:scale-95 flex items-center justify-center gap-4 cursor-pointer shadow-2xl border border-white/20"
+                >
+                  <TrendingUp className="w-6 h-6" />
+                  BUY
+                </button>
+                <button 
+                  onClick={() => handleAction('SELL')}
+                  className="p-6 bg-black hover:bg-neutral-900 text-white font-black text-lg uppercase tracking-[0.25em] rounded-[2rem] transition-all active:scale-95 flex items-center justify-center gap-4 cursor-pointer shadow-2xl border border-white/10"
+                >
+                  <TrendingDown className="w-6 h-6" />
+                  SELL
+                </button>
+              </div>
             </div>
 
-            {/* 1. Full-Width Candlestick Trading Station with Zoom In, Zoom Out, Stretch Controls */}
-            <CandleChart
-              symbol={selectedSymbol}
-              assetName={activeAsset?.name || selectedSymbol}
-              currentPrice={activeAsset?.price || 0}
-              precision={activeAsset?.precision || 2}
-              candles={candles}
-              technicals={technicals}
-              predictedCandle={prediction?.predictedCandle}
-              predictionSymbol={prediction?.symbol}
-              predictedDirection={prediction?.direction}
-              upProbability={prediction?.upProbability}
-              timeframe={timeframe}
-              onChangeTimeframe={(tf) => setTimeframe(tf)}
-              isLoading={isLoadingCandles}
-              isDedicatedPage={true}
-            />
-
-            {/* Scroll Down Indicator */}
-            <div className="flex items-center justify-center gap-2 py-1 text-xs font-mono text-neutral-400">
-              <span>▼ Scroll down to inspect Inside Calculation Brain breakdown, forecast targets & technicals</span>
-            </div>
-
-            {/* 2. Directly Underneath: Today's Daily Candle Forecast & Inside Calculation Brain Breakdown */}
-            <BrainPredictionCard
-              prediction={prediction}
-              isLoading={isLoadingPrediction}
-            />
-
-            {/* 3. Deep Technical Indicators & Floor Pivot Points */}
-            <TechnicalsCard
-              technicals={technicals}
-              precision={activeAsset?.precision || 2}
-            />
-
-            {/* 4. Google Trade Automated Execution Signals */}
-            <GoogleTradeCard
-              tradeSetup={prediction?.tradeSetup}
-              googleTrade={prediction?.googleTrade}
-              tradeHistory={prediction?.tradeHistory}
-              pendingOrders={prediction?.pendingOrders}
-              currentPrice={activeAsset?.price || 0}
-              precision={activeAsset?.precision || 2}
-              onOpenAITradeHub={() => setIsAITradeHubOpen(true)}
-            />
-          </div>
-        )}
-
-        {/* ============================================================ */}
-        {/* PAGE 4: ANALYZE (Market Research, Sentiments, & Trends Suite) */}
-        {/* ============================================================ */}
-        {activeTask === 'analyze' && (
-          <div className="space-y-6">
-            {/* Page Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-200">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-amber-600 text-white flex items-center justify-center">
-                  <BarChart3 className="w-5 h-5" />
+            {/* Asset Pulse Watchlist */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-neutral-500 px-2">
+                <div className="flex items-center gap-2">
+                  <Search className="w-3 h-3" />
+                  <span>Market Pulse</span>
                 </div>
-                <div>
-                  <h1 className="text-xl font-black text-black tracking-tight font-sans">
-                    Market Research & Sentiment Analysis Suite
-                  </h1>
-                  <p className="text-xs text-neutral-500 font-mono">
-                    Google Trends Search Interest Velocity, News Sentiment Web Extraction & Technical Confluence
-                  </p>
-                </div>
+                <span>{markets.length} Assets</span>
               </div>
-
-              <div className="flex items-center gap-2 text-xs font-mono">
-                <span className="text-neutral-500">Analyzing:</span>
-                <span className="font-bold text-black px-2.5 py-1 bg-neutral-100 rounded border border-neutral-200">
-                  {selectedSymbol}
-                </span>
-              </div>
-            </div>
-
-            {/* 2-Column Deep Analysis Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left Column: Google Trends Search Analytics & Technicals */}
-              <div className="lg:col-span-6 space-y-6">
-                <GoogleAnalyticsTrendsCard
-                  analytics={prediction?.googleTrends}
-                  symbol={selectedSymbol}
-                />
-
-                <TechnicalsCard
-                  technicals={technicals}
-                  precision={activeAsset?.precision || 2}
-                />
-              </div>
-
-              {/* Right Column: News Sentiments & World Watchlist */}
-              <div className="lg:col-span-6 space-y-6">
-                <NewsSentimentsCard
-                  news={prediction?.newsSentiments || []}
-                  symbol={selectedSymbol}
-                  assetName={activeAsset?.name || selectedSymbol}
-                />
-
-                {/* World Markets Pulse */}
-                <div className="w-full bg-white border border-neutral-200 rounded-lg p-5 shadow-xs">
-                  <div className="flex items-center justify-between pb-3.5 border-b border-neutral-200">
-                    <div className="flex items-center gap-2">
-                      <Globe className="w-4 h-4 text-black" />
-                      <h3 className="text-sm font-bold text-black font-sans">
-                        Cross-Asset Confluence Watchlist
-                      </h3>
+              <div className="space-y-2">
+                {markets.slice(0, 15).map((m) => (
+                  <div 
+                    key={m.symbol}
+                    onClick={() => {
+                      setSelectedSymbol(m.symbol);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className={`p-4 rounded-xl border flex items-center justify-between transition-all cursor-pointer group ${m.symbol === selectedSymbol ? 'bg-white text-black border-white' : 'bg-neutral-900/30 border-neutral-800 hover:border-neutral-700'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <AssetLogo symbol={m.symbol} size="sm" />
+                      <div>
+                        <div className="text-xs font-black uppercase tracking-tight">{m.symbol.split('/')[0]}</div>
+                        <div className="text-[7px] font-black text-neutral-500 uppercase tracking-widest">{m.category}</div>
+                      </div>
                     </div>
-                    <span className="text-[10px] font-mono text-neutral-400 uppercase">
-                      {markets.length} Real-Time Feeds
-                    </span>
+                    <div className="text-right">
+                      <div className="text-[11px] font-black font-mono">${m.price.toLocaleString(undefined, { minimumFractionDigits: m.precision })}</div>
+                      <div className={`text-[9px] font-black ${m.symbol === selectedSymbol ? 'text-neutral-500' : (m.change24hPercent >= 0 ? 'text-emerald-400' : 'text-rose-400')}`}>
+                        {m.change24hPercent >= 0 ? '+' : ''}{m.change24hPercent.toFixed(1)}%
+                      </div>
+                    </div>
                   </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 text-xs font-mono">
-                    {markets.slice(0, 8).map((asset) => {
-                      const isUp = asset.change24hPercent >= 0;
-                      const isCurrent = asset.symbol === selectedSymbol;
-
-                      return (
-                        <div
-                          key={asset.symbol}
-                          onClick={() => handleSelectSymbol(asset.symbol)}
-                          className={`p-2 rounded border cursor-pointer flex items-center justify-between transition-colors ${
-                            isCurrent
-                              ? 'bg-black text-white border-black font-bold'
-                              : 'bg-neutral-50 hover:bg-neutral-100 border-neutral-200'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <AssetLogo symbol={asset.symbol} size="sm" />
-                            <div>
-                              <div className="font-bold">{asset.symbol}</div>
-                              <div className={`text-[10px] truncate max-w-[80px] ${isCurrent ? 'text-neutral-300' : 'text-neutral-500'}`}>
-                                {asset.name}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="text-right">
-                            <div className="font-semibold tabular-nums">
-                              ${asset.price.toLocaleString(undefined, {
-                                minimumFractionDigits: asset.precision > 2 ? asset.precision : 2,
-                              })}
-                            </div>
-                            <div
-                              className={`text-[10px] font-bold tabular-nums ${
-                                isCurrent
-                                  ? isUp ? 'text-emerald-400' : 'text-rose-400'
-                                  : isUp ? 'text-emerald-700' : 'text-rose-700'
-                              }`}
-                            >
-                              {isUp ? '+' : ''}{asset.change24hPercent.toFixed(2)}%
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
-        )}
+        </div>
       </main>
 
-      {/* Advanced Free AI Model Trade Intelligence Hub Modal */}
-      <AITradeHubModal
-        isOpen={isAITradeHubOpen}
-        onClose={() => setIsAITradeHubOpen(false)}
-        markets={markets}
-        initialSymbol={selectedSymbol}
-        onSelectSymbol={handleSelectSymbol}
-      />
-
-      {/* Clean Minimalist Footer */}
-      <footer className="w-full bg-white border-t border-neutral-200 py-3 px-4 sm:px-6 text-center text-xs font-mono text-neutral-500 hidden md:block">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div>
-            <strong className="text-black font-sans">Onpiks</strong> · Real-Time Market Candle Prediction & Trade Engine
+      {/* Simplified Footer Info */}
+      <footer className="w-full px-8 py-6 border-t border-neutral-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-neutral-600">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+            <span className="text-[10px] font-black uppercase tracking-widest">Network: Live</span>
           </div>
-          <div className="text-neutral-400 text-[11px]">
-            Public Data Feeds: Binance API • Yahoo Finance V8 • Google Trends • Google News RSS
+          <div className="flex items-center gap-2">
+            <Activity className="w-3.5 h-3.5" />
+            <span className="text-[10px] font-black uppercase tracking-widest">Feed Latency: 24ms</span>
           </div>
+        </div>
+        <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest">
+           <span>Terms</span>
+           <span>Privacy</span>
+           <span>© 2026 Onpiks Terminal</span>
         </div>
       </footer>
     </div>

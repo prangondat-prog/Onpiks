@@ -4,22 +4,20 @@
  */
 
 import React, { useState } from 'react';
-import { MarketAsset, Candle, TechnicalIndicators } from '../types.js';
+import { MarketAsset } from '../types.js';
 import {
   Sparkles,
   X,
-  Zap,
-  TrendingUp,
-  TrendingDown,
-  Compass,
-  Building2,
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  FileText,
-  BarChart2,
-  Clock,
-  Layers,
+  BarChart3,
+  Globe,
+  Zap,
+  ChevronRight,
+  ShieldCheck,
+  TrendingUp,
+  TrendingDown
 } from 'lucide-react';
 import { AssetLogo } from './AssetLogo.tsx';
 
@@ -50,7 +48,7 @@ export const AITradeHubModal: React.FC<AITradeHubModalProps> = ({
 
   if (!isOpen) return null;
 
-  const currentAsset = markets.find((m) => m.symbol === selectedSym) || markets[0];
+  const currentAsset = markets?.find((m) => m.symbol === selectedSym) || (markets?.length > 0 ? markets[0] : null);
 
   const handleRunAIAnalysis = async (symToAnalyze: string) => {
     try {
@@ -93,159 +91,165 @@ export const AITradeHubModal: React.FC<AITradeHubModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-      <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto glass-card rounded-2xl p-6 shadow-2xl space-y-5 border border-neutral-300">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-neutral-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center font-bold shadow-xs">
-              <Sparkles className="w-5 h-5 text-amber-400" />
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-2xl p-4 animate-in fade-in duration-300">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden bg-[#050505] rounded-[2.5rem] border border-white/10 shadow-[0_40px_100px_rgba(0,0,0,1)] flex flex-col">
+        
+        {/* Modal Header - Fixed */}
+        <div className="px-8 pt-8 pb-6 flex items-center justify-between border-b border-white/5">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-[1.25rem] bg-neonGreen text-black flex items-center justify-center font-bold shadow-[0_0_20px_rgba(216,252,34,0.4)]">
+              <Zap className="w-6 h-6 fill-black" />
             </div>
             <div>
-              <h2 className="text-lg font-black text-black font-sans tracking-tight">
-                Advanced Free AI Trade Intelligence Model
+              <h2 className="text-xl font-black text-white font-sans tracking-tighter">
+                AI Deep Intelligence
               </h2>
-              <p className="text-xs text-neutral-500 font-mono">
-                Trained on global stock shares, crude oil, commodities, crypto & forex markets
+              <p className="text-[10px] text-neutral-500 font-mono uppercase tracking-[0.3em]">
+                Synthesis Engine v4.2.0
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-black cursor-pointer transition-colors"
+            className="p-3 rounded-2xl bg-neutral-900 border border-white/5 hover:border-white/20 text-white cursor-pointer transition-all active:scale-90"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Asset Switcher Strip */}
-        <div className="space-y-2">
-          <div className="text-xs font-mono font-bold text-neutral-600 uppercase">
-            Select Asset / Share for Instant Real-Time AI Analysis:
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8 no-scrollbar">
+          
+          {/* Asset Quick Switch */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-[10px] font-black text-neutral-500 uppercase tracking-widest">
+              <Globe className="w-3.5 h-3.5" />
+              <span>Select High-Alpha Asset</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {markets.slice(0, 8).map((m) => {
+                const isSelected = selectedSym === m.symbol;
+                return (
+                  <button
+                    key={m.symbol}
+                    onClick={() => handleSelectAndAnalyze(m.symbol)}
+                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center gap-3 active:scale-95 ${
+                      isSelected
+                        ? 'bg-white text-black border-white shadow-xl'
+                        : 'bg-neutral-900/50 border-white/5 text-neutral-400 hover:border-white/10'
+                    }`}
+                  >
+                    <AssetLogo symbol={m.symbol} size="sm" />
+                    <span className="text-[11px] font-black uppercase tracking-tight truncate">{m.symbol.split('/')[0]}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 text-xs font-mono">
-            {[
-              { sym: 'NVDA', label: 'NVIDIA Share' },
-              { sym: 'AAPL', label: 'Apple Share' },
-              { sym: 'TSLA', label: 'Tesla Share' },
-              { sym: 'BTC/USD', label: 'Bitcoin Crypto' },
-              { sym: 'OIL_WTI', label: 'Crude Oil WTI' },
-              { sym: 'EUR/USD', label: 'EUR/USD Forex' },
-            ].map((item) => {
-              const isSelected = selectedSym === item.sym;
-              return (
-                <button
-                  key={item.sym}
-                  onClick={() => handleSelectAndAnalyze(item.sym)}
-                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2 ${
-                    isSelected
-                      ? 'bg-black text-white border-black font-black shadow-xs ring-2 ring-neutral-400'
-                      : 'bg-neutral-50 hover:bg-neutral-100 border-neutral-200 text-neutral-900'
-                  }`}
-                >
-                  <AssetLogo symbol={item.sym} size="sm" />
-                  <div className="truncate">
-                    <div className="font-bold">{item.sym}</div>
-                    <div className={`text-[9px] truncate ${isSelected ? 'text-neutral-300' : 'text-neutral-500'}`}>
-                      {item.label}
+          {/* Analysis Viewport */}
+          <div className="space-y-6">
+             <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-[10px] font-black text-neutral-500 uppercase tracking-widest">
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  <span>Real-time Synthesis Output</span>
+                </div>
+                {aiReport && (
+                   <span className="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">Generated: {aiReport.timestamp}</span>
+                )}
+             </div>
+
+             {isAnalyzing ? (
+               <div className="p-16 text-center space-y-6 bg-neutral-900/20 rounded-[2.5rem] border border-white/5 border-dashed">
+                 <div className="relative w-16 h-16 mx-auto">
+                    <div className="absolute inset-0 rounded-full border-4 border-neonGreen/20"></div>
+                    <div className="absolute inset-0 rounded-full border-4 border-neonGreen border-t-transparent animate-spin"></div>
+                    <Zap className="absolute inset-0 m-auto w-6 h-6 text-neonGreen fill-neonGreen animate-pulse" />
+                 </div>
+                 <div className="space-y-2">
+                    <p className="text-sm font-black text-white uppercase tracking-widest">AI Thinking...</p>
+                    <p className="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.2em]">Analyzing Order Books & Sentiment Catalysts</p>
+                 </div>
+               </div>
+             ) : aiReport ? (
+               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                 <div className="p-6 bg-gradient-to-br from-neutral-900 to-black rounded-[2rem] border border-white/5 shadow-2xl space-y-6 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-neonGreen/5 blur-3xl pointer-events-none"></div>
+                    
+                    <div className="flex items-center justify-between pb-4 border-b border-white/5">
+                      <div className="flex items-center gap-3">
+                         <div className="w-10 h-10 rounded-xl bg-neonGreen/10 flex items-center justify-center text-neonGreen">
+                           <ShieldCheck className="w-6 h-6" />
+                         </div>
+                         <div>
+                            <div className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">Decision Status</div>
+                            <div className="text-sm font-black text-white uppercase">High Confidence Signal</div>
+                         </div>
+                      </div>
+                      <div className="flex gap-2">
+                         <div className="px-3 py-1 rounded-lg bg-neutral-800 text-[10px] font-black text-neutral-300 uppercase">VOLATILE</div>
+                         <div className="px-3 py-1 rounded-lg bg-neonGreen/10 text-[10px] font-black text-neonGreen uppercase border border-neonGreen/20">BULLISH</div>
+                      </div>
                     </div>
-                  </div>
-                </button>
-              );
-            })}
+
+                    <div className="text-sm font-medium text-neutral-300 leading-relaxed whitespace-pre-wrap font-sans">
+                      {aiReport.analysisText}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-4">
+                       <button className="p-4 bg-neonGreen rounded-2xl flex items-center justify-center gap-2 text-black font-black text-xs uppercase tracking-widest hover:scale-[1.02] transition-transform cursor-pointer">
+                          <TrendingUp className="w-4 h-4" />
+                          Execute Long
+                       </button>
+                       <button className="p-4 bg-neutral-800 rounded-2xl flex items-center justify-center gap-2 text-white font-black text-xs uppercase tracking-widest hover:scale-[1.02] transition-transform cursor-pointer">
+                          <TrendingDown className="w-4 h-4" />
+                          Execute Short
+                       </button>
+                    </div>
+                 </div>
+               </div>
+             ) : (
+               <div className="p-20 text-center space-y-4 bg-neutral-900/10 rounded-[2.5rem] border border-white/5 border-dashed">
+                 <Sparkles className="w-12 h-12 text-neutral-800 mx-auto" />
+                 <p className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.4em]">Initialize Deep Asset Analysis</p>
+                 <button 
+                  onClick={() => handleRunAIAnalysis(selectedSym)}
+                  className="px-8 py-3 bg-white text-black rounded-full font-black text-[11px] uppercase tracking-widest hover:scale-110 transition-all cursor-pointer shadow-xl"
+                 >
+                   Synthesize {selectedSym.split('/')[0]}
+                 </button>
+               </div>
+             )}
+
+             {errorMessage && (
+               <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl text-[11px] font-black text-rose-500 flex items-center gap-3 uppercase tracking-widest">
+                 <AlertCircle className="w-5 h-5 shrink-0" />
+                 <span>{errorMessage}</span>
+               </div>
+             )}
           </div>
         </div>
 
-        {/* Selected Asset Header Box */}
-        {currentAsset && (
-          <div className="p-4 glass-panel rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <AssetLogo symbol={currentAsset.symbol} size="md" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base font-black text-black font-sans">{currentAsset.name}</h3>
-                  <span className="px-2 py-0.5 bg-neutral-900 text-white rounded text-[10px] font-mono font-bold uppercase">
-                    {currentAsset.symbol}
-                  </span>
-                </div>
-                <div className="text-xs text-neutral-500 font-mono mt-0.5">
-                  Sector: {currentAsset.sector || currentAsset.category} · Region: {currentAsset.region || 'Global'}
-                </div>
+        {/* Modal Footer - Fixed */}
+        <div className="px-8 py-6 bg-black border-t border-white/5 flex items-center justify-between">
+           <div className="flex items-center gap-4 text-neutral-600">
+              <div className="flex items-center gap-1">
+                 <div className="w-1 h-1 rounded-full bg-neonGreen"></div>
+                 <span className="text-[9px] font-black uppercase tracking-widest">API Status: OK</span>
               </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="text-right font-mono">
-                <div className="text-lg font-black text-black tabular-nums">
-                  ${currentAsset.price.toLocaleString(undefined, { minimumFractionDigits: currentAsset.precision })}
-                </div>
-                <div
-                  className={`text-xs font-bold tabular-nums ${
-                    currentAsset.change24hPercent >= 0 ? 'text-emerald-700' : 'text-rose-700'
-                  }`}
-                >
-                  {currentAsset.change24hPercent >= 0 ? '+' : ''}
-                  {currentAsset.change24hPercent.toFixed(2)}% (24h)
-                </div>
+              <div className="flex items-center gap-1">
+                 <div className="w-1 h-1 rounded-full bg-blue-500"></div>
+                 <span className="text-[9px] font-black uppercase tracking-widest">GenAI Pro: Active</span>
               </div>
-
-              <button
-                onClick={() => handleRunAIAnalysis(selectedSym)}
-                disabled={isAnalyzing}
-                className="px-4 py-2 bg-black text-white hover:bg-neutral-800 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-xs"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isAnalyzing ? 'animate-spin' : ''}`} />
-                <span>{isAnalyzing ? 'Analyzing AI...' : 'Run Real-Time AI Model'}</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Error alert if any */}
-        {errorMessage && (
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-mono text-rose-900 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
-        {/* AI Report Result Display */}
-        {isAnalyzing ? (
-          <div className="p-8 text-center glass-panel rounded-xl space-y-3 animate-pulse">
-            <div className="w-8 h-8 rounded-full bg-black text-white mx-auto flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
-            </div>
-            <div className="text-xs font-mono font-bold text-black">
-              Running Advanced Free Gemini AI Trade Model on {selectedSym}...
-            </div>
-            <div className="text-[11px] font-mono text-neutral-500">
-              Analyzing real-time order books, technical momentum & global financial news catalysts...
-            </div>
-          </div>
-        ) : aiReport ? (
-          <div className="space-y-4 font-sans animate-in fade-in">
-            <div className="p-4 glass-panel rounded-xl border border-neutral-200/90 space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-neutral-200">
-                <span className="text-xs font-mono font-black text-black uppercase flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  Real-Time AI Trade Intelligence Output
-                </span>
-                <span className="text-[11px] font-mono text-neutral-400">{aiReport.timestamp}</span>
-              </div>
-
-              <div className="text-xs font-mono text-neutral-800 leading-relaxed whitespace-pre-wrap font-medium">
-                {aiReport.analysisText}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="p-8 text-center glass-panel rounded-xl text-xs font-mono text-neutral-500 space-y-2">
-            <Sparkles className="w-6 h-6 text-amber-500 mx-auto" />
-            <p>Click "Run Real-Time AI Model" to generate full stock, commodity, crypto or forex analysis.</p>
-          </div>
-        )}
+           </div>
+           <button 
+            onClick={onClose}
+            className="text-[10px] font-black text-neutral-500 uppercase tracking-widest hover:text-white transition-colors cursor-pointer"
+           >
+             Dismiss
+           </button>
+        </div>
       </div>
     </div>
   );
